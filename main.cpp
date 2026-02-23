@@ -24,10 +24,16 @@ const int MAX_GENERATIONS = 5000;
 /** @brief Probabilidade de mutação aplicada a cada gene (vértice) durante a reprodução. */
 const float MUTATION_RATE = 0.05f;
 
+/**
+ * @brief Função principal (Entry point).
+ * @param argc Número de argumentos da linha de comando.
+ * @param argv Vetor de argumentos: [1] arquivo_col, [2] num_cores (k), [3] seed.
+ * @return int 0 para sucesso, 1 para erro de argumentos.
+ */
 int main(int argc, char *argv[])
 {
 
-    // 1. Lendo argumentos
+    // 1. Lendo e validando os argumentos de linha de comando
     if (argc < 4)
     {
         std::cerr << "Uso ./main <arquivo_col> <num_cores> <seed>" << std::endl;
@@ -38,29 +44,32 @@ int main(int argc, char *argv[])
     int num_colors = std::stoi(argv[2]);
     unsigned long seed_val = std::stoul(argv[3]);
     
+    // 2. Carregamento do Grafo no Host (CPU)
     std::cout << "Carregando Grafo: " << filename << std::endl;
     Graph graph(filename);
     std::mt19937 rng(seed_val);
 
+    // 3. Tradução para formato CSR e Envio para o Device (GPU)
     std::cout << "Convertendo para CSR e enviando para GPU..." << std::endl;
     CSRGraph csr = convertToCSR(graph);
     uploadGraphToGPU(csr);
 
-    // Instancia o Gerenciador GPU
+    // 4. Instanciação do Gerenciador da População na GPU
     GpuPopulation gpuPop(POP_SIZE, csr.num_vertices);
 
     std::cout << "Gerando população inicial (" << POP_SIZE << " indivíduos)..." << std::endl;
     gpuPop.initializeRandomPopulation(num_colors);
 
-    // Vetor auxiliar para ler o fitness de volta na CPU (para estatísticas)
+    // Vetor auxiliar na memória do Host (CPU) para receber e avaliar estatísticas da GPU
     std::vector<int> host_fitness_buffer;
 
-    // ---- LOOP EVOLUTIVO ----
+    // ---- 5. LOOP EVOLUTIVO PRINCIPAL ----
     std::cout << "Iniciando evolução por " << MAX_GENERATIONS << " gerações..." << std::endl;
 
     auto start_time = std::chrono::high_resolution_clock::now();
 
-    // CONFIGURAÇÃO DO TIMEOUT INTERNO (10s a menos que o o Python que mata em 180s)
+    // Configuração do timeout interno (170s) para evitar que o script Python mate o processo (180s) 
+    // abruptamente, permitindo salvar o resultado parcial.
     const double TIME_LIMIT_SEC = 170.0;
     int best_fit_global = 999999;
     int gen_found_best = -1;
@@ -68,9 +77,10 @@ int main(int argc, char *argv[])
 
     for (; gen < MAX_GENERATIONS; ++gen)
     {
-        // Avaliar população atual na GPU
+        // 5.1 Avaliação: Calcula conflitos de todos os indivíduos em paralelo na GPU
         gpuPop.evaluateFitness(csr);
 
+        // 5.2 Verificação de Timeout de Segurança (a cada 100 gerações)
         if (gen % 100 == 0) {
             auto current_time = std::chrono::high_resolution_clock::now();
             std::chrono::duration<double> current_elapsed = current_time - start_time;
@@ -82,26 +92,26 @@ int main(int argc, char *argv[])
                 int current_best = *std::min_element(host_fitness_buffer.begin(), host_fitness_buffer.end());
                 if (current_best < best_fit_global) best_fit_global = current_best;
 
-                // Imprime resultado parcial usando 'gen' atual
+                // Imprime resultado parcial usando 'gen' atual e sai de forma segura
                 std::cout << "CSV_RESULT;" << best_fit_global << ";" << current_elapsed.count() << ";" << gen << std::endl;
                 
                 freeGraphOnGPU(csr);
-                return 0; // Sai com sucesso
+                return 0; // Encerra o programa com sucesso para o Python ler os dados parciais
             }
         }
 
-        // Relatório a cada 100 gerações (processo lento)
+        // 5.3 Relatório de Progresso e Condição de Parada (a cada 500 gerações ou na última)
         if (gen % 500 == 0 || gen == MAX_GENERATIONS - 1)
         {
             gpuPop.getFitnessToVector(host_fitness_buffer);
 
-            // Encontra o melhor fitness
+            // Encontra o melhor fitness desta geração
             int current_best = *std::min_element(host_fitness_buffer.begin(), host_fitness_buffer.end());
 
             if (current_best < best_fit_global) 
                 best_fit_global = current_best;
 
-            // Critério de Parada Antecipada
+            // Critério de Parada Antecipada: Encontrou uma coloração própria (zero conflitos)
             if (best_fit_global == 0)
             {
                 auto now = std::chrono::high_resolution_clock::now();
@@ -114,19 +124,21 @@ int main(int argc, char *argv[])
             }
         }
 
-        // Evolução (Seleção + Crossover + Mutação)
+        // 5.4 Evolução: Seleção de pais, Crossover Heurístico e Mutação
         gpuPop.evolveGenerationHeritage(csr, MUTATION_RATE, num_colors);
-        // Preserva o melhor da geração atual
+        
+        // 5.5 Elitismo: Copia o melhor indivíduo atual para a nova geração
         gpuPop.preserveElite(csr.num_vertices);
-        // Troca buffers
+        
+        // 5.6 Troca de Buffers (Double Buffering Ping-Pong)
         gpuPop.swapPopulation();
     }
 
+    // ---- 6. FINALIZAÇÃO E RELATÓRIO PÓS-LOOP ----
     auto end_time = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = end_time - start_time;
-
-    // --- RESULTADOS FINAIS ---
-    // Garante que o fitness final está atualizado
+    
+    // Garante que o fitness final está atualizado com a última modificação da GPU
     gpuPop.evaluateFitness(csr);
     gpuPop.getFitnessToVector(host_fitness_buffer);
     int final_best = *std::min_element(host_fitness_buffer.begin(), host_fitness_buffer.end());
