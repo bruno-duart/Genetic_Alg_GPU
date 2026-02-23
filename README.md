@@ -82,18 +82,6 @@ python3 python_scrpits/run_experiments.py
 * **Controle de Timeout:** Instâncias que excedem o tempo limite de 180s são interrompidas pelo Python (nota: o código C++ possui um mecanismo interno de 170s para salvar resultados parciais antes do timeout brusco do Python).
 * **Salvamento em Tempo Real:** Grava os resultados linha a linha (com `flush`), prevenindo perda de dados em caso de falha.
 
-## 📊 Limpeza e Tratamento de Dados
-
-Caso você precise reprocessar instâncias (por exemplo, limpar execuções que terminaram rapidamente com fitness `0` para capturar a contagem exata de gerações), utilize o script auxiliar de limpeza.
-
-Ele preserva as execuções demoradas (fitness > 0) e apaga as fáceis para que o `run_experiments.py` as refaça rapidamente.
-
-**Comando:**
-
-```bash
-python3 python_scripts/clean_csv.py
-
-```
 
 ## 📂 Estrutura do Diretório
 
