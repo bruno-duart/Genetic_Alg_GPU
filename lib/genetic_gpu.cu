@@ -1,3 +1,7 @@
+/**
+ * @file genetic_gpu.cu
+ * @brief Implementação dos Kernels CUDA e da classe GpuPopulation.
+ */
 #include "genetic_gpu.cuh"
 #include <cuda_runtime.h>
 #include <curand_kernel.h>
@@ -5,6 +9,12 @@
 #include <thrust/device_ptr.h>
 #include <thrust/extrema.h>
 
+/**
+ * @brief Kernel para inicializar os estados geradores de números aleatórios (cuRAND).
+ * @param states Ponteiro para o array de estados alocados no Device.
+ * @param n Tamanho da população (número de threads reais).
+ * @param seed Semente geradora base.
+ */
 __global__ void init_rng(curandState *states, int n, unsigned long long seed)
 {
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -18,20 +28,20 @@ __global__ void init_rng(curandState *states, int n, unsigned long long seed)
 GpuPopulation::GpuPopulation(int p_size, int n_verts)
     : pop_size{p_size}, num_vertices{n_verts}
 {
-    // Alocação de memória
+    // Alocação de memória global na GPU
     cudaMalloc((void **)&d_fitness, pop_size * (sizeof(int)));
     cudaMalloc((void **)&d_genes, pop_size * num_vertices * sizeof(int));
     cudaMalloc((void **)&d_genes_next, pop_size * num_vertices * sizeof(int));
     cudaMalloc((void **)&d_rng_states, pop_size * sizeof(curandState));
 
-    // Geometria lançamento
+    // Configuração geométrica do lançamento do Kernel (Grid e Blocos)
     int threadsPerBlock = 256;
     int blocksPerGrid = (pop_size + threadsPerBlock - 1) / threadsPerBlock;
 
-    // Inicialiando RNG
+    // Inicializando RNG em paralelo    
     init_rng<<<blocksPerGrid, threadsPerBlock>>>((curandState *)d_rng_states, pop_size, time(NULL));
 
-    // Sincronizando para garantir que GPU finalizou
+    // Sincronizando para garantir que a GPU finalizou as inicializações do RNG
     cudaDeviceSynchronize();
 }
 
@@ -44,6 +54,9 @@ GpuPopulation::~GpuPopulation()
     cudaFree((void **)d_rng_states);
 }
 
+/**
+ * @brief Kernel que preenche a população com cores aleatórias iniciais.
+ */
 __global__ void initialize_random_population_kernel(
     int *pop,
     curandState *rng_states,
@@ -105,6 +118,9 @@ void GpuPopulation::getFitnessToVector(std::vector<int> &host_fitness) const
                cudaMemcpyDeviceToHost);
 }
 
+/**
+ * @brief Kernel que avalia o fitness (conflitos) dos indivíduos varrendo as arestas (CSR).
+ */
 __global__ void evaluate_fitness_kernel(
     int *genes,
     int *fitness,
@@ -121,11 +137,13 @@ __global__ void evaluate_fitness_kernel(
     int *my_genes = &genes[idx * num_vertices];
 
     int conflicts{0};
-
+    
+    // Percorre os vértices
     for (int u{0}; u < num_vertices; ++u)
     {
         int color_u = my_genes[u];
-
+        
+        // Acessa os vizinhos usando o formato CSR
         int start_index = row_offsets[u];
         int end_index = row_offsets[u + 1];
 
@@ -140,6 +158,7 @@ __global__ void evaluate_fitness_kernel(
         }
     }
 
+    // Grafo não-direcionado duplica a contagem de arestas conflitantes
     fitness[idx] = conflicts / 2;
 }
 
@@ -171,6 +190,10 @@ void GpuPopulation::swapPopulation()
     std::swap(d_genes, d_genes_next);
 }
 
+/**
+ * @brief Operador de Device: Seleção por Torneio.
+ * Sorteia 'k' indivíduos aleatórios e retorna o índice do indivíduo com o melhor fitness.
+ */
 __device__ int tournament_selection(curandState *localState, int *fitness, int pop_size, int k = 3)
 {
     int best_idx = -1;
@@ -249,6 +272,9 @@ __global__ void evolve_kernel(
     rng_states[idx] = localState;
 }
 
+/**
+ * @brief Kernel de Crossover de Um Ponto (Single Point) e Mutação Aleatória.
+ */
 __global__ void evolve_kernel_single_point_crossover(
     int *current_pop,        // Leitura
     int *next_pop,           // Escrita
@@ -263,10 +289,9 @@ __global__ void evolve_kernel_single_point_crossover(
     if (idx >= pop_size)
         return;
 
-    // 1. Carrega o estado RNG da thread
     curandState localState = rng_states[idx];
 
-    // 2. Seleção: Escolhe Pai e Mãe via Torneio
+    // Seleção de Pais
     int parent1_idx = tournament_selection(&localState, fitness, pop_size);
     int parent2_idx = tournament_selection(&localState, fitness, pop_size);
 
@@ -277,7 +302,7 @@ __global__ void evolve_kernel_single_point_crossover(
     // Ponteiro para descendente
     int *genes = &next_pop[idx * num_vertices];
 
-    // 3. Single Point Crossover e Mutação (Gene a Gene)
+    // Sorteia o ponto de corte transversal no cromossomo
     int single_point_x = (int)curand_uniform(&localState) * num_vertices;
 
     for (int i{0}; i < num_vertices; ++i)
@@ -286,28 +311,30 @@ __global__ void evolve_kernel_single_point_crossover(
 
         if (i < single_point_x)
         {
-            gene_val = p1_genes[i];
+            gene_val = p1_genes[i]; // Primeira parte: Pai 1
         }
         else
         {
-            gene_val = p2_genes[i];
+            gene_val = p2_genes[i]; // Segunda parte: Pai 2
         }
 
-        // Mutação: Pequena chance de trocar a cor
+        // Mutação aleatória
         if (curand_uniform(&localState) < mutation_rate)
         {
-            // Sorteia nova cor
             gene_val = (int)(curand_uniform(&localState) * (num_colors - 0.001f));
         }
 
-        // Escreve no novo indivíduo
         genes[i] = gene_val;
     }
 
-    // 4. Salva o estado do RNG atualizado para a próxima geração
     rng_states[idx] = localState;
 }
 
+/**
+ * @brief Kernel de Crossover Heurístico ("Herança de Sucesso").
+ * * Analisa o grafo (usando row_offsets e col_indices) e escolhe a cor do pai 
+ * que NÃO gerar conflito com os vizinhos, servindo como micro-reparo.
+ */
 __global__ void evolve_kernel_heritage_crossover(
     int *current_pop, // Leitura
     int *next_pop,    // Escrita
@@ -324,18 +351,13 @@ __global__ void evolve_kernel_heritage_crossover(
     if (idx >= pop_size)
         return;
 
-    // 1. Carrega o estado RNG da thread
     curandState localState = rng_states[idx];
 
-    // 2. Seleção: Escolhe Pai e Mãe via Torneio
     int parent1_idx = tournament_selection(&localState, fitness, pop_size);
     int parent2_idx = tournament_selection(&localState, fitness, pop_size);
 
-    // Ponteiros para os genes dos pais
     int *p1_genes = &current_pop[parent1_idx * num_vertices];
     int *p2_genes = &current_pop[parent2_idx * num_vertices];
-
-    // Ponteiro para descendente
     int *genes = &next_pop[idx * num_vertices];
 
     // 3. Single Point Crossover e Mutação (Gene a Gene)
@@ -349,11 +371,12 @@ __global__ void evolve_kernel_heritage_crossover(
 
         if (color_p1 == color_p2)
         {
+            // Cores consensuais são mantidas
             gene_val = color_p1;
         }
         else
         {
-            // As cores divergem
+            // Avaliação Heurística de Conflitos para desempate
             bool p1_conflicts = false;
             bool p2_conflicts = false;
 
@@ -371,8 +394,6 @@ __global__ void evolve_kernel_heritage_crossover(
             }
 
             // Verifica Pai 2 (Se P1 já falhou, P2 tem chance de salvar)
-            // Otimização: Se P1 não falhou, nem precisaria ver P2 estritamente,
-            // mas vamos ver para desempatar
             for (int k = start; k < end; ++k)
             {
                 if (p2_genes[col_indices[k]] == color_p2)
@@ -382,7 +403,7 @@ __global__ void evolve_kernel_heritage_crossover(
                 }
             }
 
-            // Tomada de Decisão
+            // Seleciona a cor que não causa conflito
             if (!p1_conflicts && p2_conflicts)
             {
                 gene_val = color_p1; // Pai 1 ganha
@@ -393,7 +414,7 @@ __global__ void evolve_kernel_heritage_crossover(
             }
             else
             {
-                // Ambos ruins ou ambos bons: Sorteio (ou mantém Single Point aqui se preferir)
+                // Em caso de empate, sorteio
                 if (curand_uniform(&localState) > 0.5f)
                     gene_val = color_p1;
                 else
@@ -455,17 +476,13 @@ void GpuPopulation::evolveGenerationHeritage(const CSRGraph &graph, float mutati
 
 void GpuPopulation::preserveElite(int num_vertices)
 {
-    // 1. "Envelopa" o ponteiro bruto da GPU para o Thrust entender
+    // Uso da biblioteca Thrust para encontrar o menor valor de forma altamente otimizada em GPU
     thrust::device_ptr<int> dt_fitness(d_fitness);
-
-    // 2. Encontra o iterador (ponteiro) para o menor valor (melhor fitness)
     thrust::device_ptr<int> min_ptr = thrust::min_element(dt_fitness, dt_fitness + pop_size);
 
-    // 3. Calcula o índice (distância do início)
     int best_idx = min_ptr - dt_fitness;
 
-    // 4. Copia os genes do ELITE (current) para a posição 0 do NEXT
-    // Sobrescreve o primeiro filho, garantindo a imortalidade do melhor encontrado
+    // Sobrescreve o primeiro indivíduo gerado (next_pop[0]) com o melhor da geração atual (Elitismo)
     cudaMemcpy(
         &d_genes_next[0],
         &d_genes[best_idx * num_vertices],

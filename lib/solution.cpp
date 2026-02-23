@@ -1,3 +1,8 @@
+/**
+ * @file solution.cpp
+ * @brief Implementação dos métodos de avaliação e modificação de soluções na CPU.
+ */
+
 #include "solution.h"
 #include "utils.h"
 #include <iostream>
@@ -11,8 +16,10 @@
 void evaluate_fitness(const Graph &graph, const Individual &indv, Fitness &fitness)
 {
     fitness = 0;
+    // Varre todos os vértices
     for (int node = 0; node < graph.getNumVertices(); node++)
     {
+        // Verifica a cor em relação a todos os vizinhos
         for (auto &neighboor : graph.adjList[node])
         {
             if (indv[node] == indv[neighboor])
@@ -21,6 +28,8 @@ void evaluate_fitness(const Graph &graph, const Individual &indv, Fitness &fitne
             }
         }
     }
+    // Como o grafo é não-direcionado, a aresta (u,v) e (v,u) são contadas,
+    // então dividimos o resultado por 2 para obter o número real de arestas em conflito.
     fitness /= 2;
 }
 
@@ -30,6 +39,7 @@ void evaluate_fitness_incremental(const Graph &graph, const Individual &indv, Fi
     conflicts_per_vertex.assign(n, 0);
     fitness = 0;
 
+    // Calcula os conflitos focados em cada vértice individualmente
     for (int v{0}; v < n; ++v){
         for (int u : graph.getNeighbors(v)){
             if (indv[v] == indv[u]){
@@ -38,6 +48,7 @@ void evaluate_fitness_incremental(const Graph &graph, const Individual &indv, Fi
         }
     }
 
+    // Calcula o fitness global (Total de arestas conflitantes)
     for (int node = 0; node < graph.getNumVertices(); node++)
     {
         for (auto &neighboor : graph.adjList[node])
@@ -56,11 +67,9 @@ void random_individual(int num_color, const Graph &graph, Individual &indv, std:
 {
     for (int i = 0; i < graph.getNumVertices(); i++)
     {
-        // indv[i] = (rand() % num_color) + 1;
+        // Sorteia uma cor uniforme no intervalo [0, num_color - 1]
         indv[i] = randint(0, num_color - 1, rng);
     }
-
-    // evaluate_fitness(graph);
 }
 
 // Método para copiar uma solução para outra
@@ -103,12 +112,12 @@ int compute_fitness_change(const Graph &graph, const Individual &indv, int verte
     {
         if (indv[neighbor] == old_color)
         {
-            // Removendo um conflito
+            // O vizinho tinha a cor antiga, a mudança remove esse conflito
             conflict_change--;
         }
         if (indv[neighbor] == new_color)
         {
-            // Adicionando um conflito
+            // O vizinho tem a cor nova, a mudança vai gerar um novo conflito
             conflict_change++;
         }
     }
@@ -122,6 +131,7 @@ int compute_swap_fitness_change(const Graph &graph, const Individual &indv, int 
     int color_u{indv[u]};
     int color_v{indv[v]};
 
+    // Avalia o impacto de u receber a cor de v
     for (auto neighbor : graph.getNeighbors(u))
     {
         if (neighbor == v)
@@ -132,6 +142,7 @@ int compute_swap_fitness_change(const Graph &graph, const Individual &indv, int 
             delta++; // possível novo conflito
     }
 
+    // Avalia o impacto de v receber a cor de u
     for (auto neighbor : graph.getNeighbors(v))
     {
         if (neighbor == u)
@@ -229,13 +240,6 @@ bool vertex_has_conflicts(const Graph &graph, const Individual &indv, const int 
     return false;
 }
 
-/**
- * @brief Retorna uma lista de todos os vértices que estão em conflito.
- * * Um vértice está em conflito se tem pelo menos um vizinho com a mesma cor.
- * * @param graph O grafo a ser analisado.
- * @param indv A coloração atual (solução).
- * @return std::vector<int> Uma lista contendo os IDs dos vértices em conflito.
- */
 std::vector<int> get_conflicted_vertices(const Graph &graph, const Individual &indv)
 {
     std::vector<int> conflicted_vertices;
