@@ -91,5 +91,4 @@ python3 python_scrpits/run_experiments.py
 * `info/instances_with_k.csv` - Tabela de instâncias e número de cores base para os testes.
 * `resultados/` - Diretório onde os arquivos `.csv` de saída são gerados.
 * `main.cpp` - Ponto de entrada do programa C++.
-* `run_experiments.py` - Script principal de automação e coleta de dados.
-* `clean_csv.py` - Utilitário para limpeza seletiva do arquivo de resultados.
+* `python_scripts/run_experiments.py` - Script principal de automação e coleta de dados.
