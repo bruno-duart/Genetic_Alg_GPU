@@ -1,3 +1,11 @@
+/**
+ * @file main.cpp
+ * @brief Ponto de entrada do Algoritmo Genético em GPU para o Problema de Coloração de Grafos.
+ * * Este arquivo orquestra a leitura da instância, alocação de memória na GPU (CSR),
+ * inicialização da população e o loop evolutivo principal (Avaliação, Seleção, 
+ * Crossover, Mutação e Elitismo) juntamente com as condições de parada.
+ */
+
 #include "graphs.h"
 #include "gpu_translator.h"
 #include "genetic_gpu.cuh"
@@ -9,8 +17,11 @@
 #include <algorithm>
 #include <string>
 
+/** @brief Tamanho fixo da população. Recomenda-se múltiplos de 256 (tamanho do bloco CUDA). */
 const int POP_SIZE = 2048;
+/** @brief Número máximo de gerações permitidas antes da parada do algoritmo. */
 const int MAX_GENERATIONS = 5000;
+/** @brief Probabilidade de mutação aplicada a cada gene (vértice) durante a reprodução. */
 const float MUTATION_RATE = 0.05f;
 
 int main(int argc, char *argv[])
