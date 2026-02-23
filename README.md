@@ -1,38 +1,6 @@
 # GPU-Accelerated Genetic Algorithm for Graph Coloring Problem (GCP)
 
-Este repositório contém a implementação de um Algoritmo Genético paralelizado em GPU (usando CUDA C++) para resolver o Problema de Coloração de Grafos (GCP). O projeto foi desenvolvido como parte de uma disciplina de mestrado, focando em explorar o paralelismo massivo da GPU para operadores genéticos e avaliação de fitness.
-
-## 💻 Ambiente de Desenvolvimento
-
-O projeto foi desenvolvido e testado no seguinte ambiente:
-- **SO Hospedeiro:** Windows 11
-- **Subsistema (WSL2):** Ubuntu 22.04 LTS
-- **IDE:** Visual Studio Code (VSCode)
-- **Compilador CUDA:** Cuda compilation tools, release 12.9, V12.9.86 (Build cuda_12.9.r12.9/compiler.36037853_0)
-- **Hardware GPU:** NVIDIA RTX 3050 (Mobile)
-
-## 🛠️ Pré-requisitos e Dependências
-
-Para compilar e executar este projeto, você precisará de:
-
-### C++/CUDA
-- **NVIDIA CUDA Toolkit (12.9+)**: Essencial para compilação com `nvcc`.
-- Suporte a C++14 ou superior.
-
-### Python (Para Automação de Testes)
-- Python 3.8+
-- Bibliotecas: `pandas`, `numpy`, `tqdm`
-  ```bash
-  pip install pandas numpy tqdm
-
-Peço desculpas pela confusão! Abaixo está o código fonte em Markdown bruto.
-
-Você pode clicar no botão de "Copiar código" no canto superior direito do bloco abaixo e colar diretamente no seu arquivo `README.md`:
-
-```markdown
-# GPU-Accelerated Genetic Algorithm for Graph Coloring Problem (GCP)
-
-Este repositório contém a implementação de um Algoritmo Genético paralelizado em GPU (usando CUDA C++) para resolver o Problema de Coloração de Grafos (GCP). O projeto foi desenvolvido como parte de uma disciplina de mestrado, focando em explorar o paralelismo massivo da GPU para operadores genéticos, avaliação de fitness e gerenciamento eficiente de memória (formato CSR e Double Buffering).
+Este repositório contém a implementação de um Algoritmo Genético paralelizado em GPU (usando CUDA C++) para resolver o Problema de Coloração de Grafos (GCP). O projeto foi desenvolvido como parte da disciplina Computação em GPU, para o Programa de Pós-Graduação em Engenharia Elétrica e de Computação, focando em explorar o paralelismo massivo da GPU para operadores genéticos, avaliação de fitness e gerenciamento eficiente de memória (formato CSR e Double Buffering).
 
 ## 💻 Ambiente de Desenvolvimento
 
@@ -41,7 +9,7 @@ O projeto foi desenvolvido, compilado e testado no seguinte ambiente:
 - **Subsistema Linux:** WSL2 (Ubuntu 22.04 LTS)
 - **IDE:** Visual Studio Code (VSCode)
 - **Compilador CUDA:** Cuda compilation tools, release 12.9, V12.9.86 (Build cuda_12.9.r12.9/compiler.36037853_0)
-- **Hardware GPU:** NVIDIA RTX 3050 (Mobile) - *Recomenda-se o uso do "Modo de Desempenho" para testes longos.*
+- **Hardware GPU:** NVIDIA RTX 3050 6GB - *Recomenda-se o uso do "Modo de Desempenho" para testes longos.*
 
 ## 🛠️ Pré-requisitos e Dependências
 
@@ -51,13 +19,13 @@ Para compilar e executar este projeto, você precisará de:
 - **NVIDIA CUDA Toolkit (12.9+)**: Essencial para compilação com `nvcc`.
 - Compilador C++ com suporte a C++14 ou superior (ex: `g++`).
 
-### 2. Python (Para Automação de Testes)
-Os scripts de automação requerem Python 3.8+ e algumas bibliotecas de análise de dados.
-Instale as dependências executando:
-```bash
-pip install pandas numpy tqdm
+### Python (Para Automação de Testes)
+- Python 3.8+
+- Bibliotecas: `pandas`, `numpy`, `tqdm`
+  ```bash
+  pip install pandas numpy tqdm
 
-```
+  ```
 
 ## 🏗️ Compilação do Projeto
 
